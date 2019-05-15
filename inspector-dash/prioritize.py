@@ -13,7 +13,28 @@ PERMITS_FILE = "data/permits.csv"
 
 SEMGENTS_FILE = "data/segments.csv"
 
-def score_permits_by_duration(permits, duration_key="TOTAL_DAYS", score_key="duration_score")
+def score_permits_by_duration(permits, duration_key="TOTAL_DAYS", score_key="duration_score"):
+    for permit_id in permits:
+
+        try:
+            duration = int(permits[permit_id][duration_key])
+        except ValueError:
+            # TODO: how to handle permits with duration?
+            duration = 999
+
+        if duration <= 6:
+            score = 10
+        elif duration <= 15:
+            score = 5
+        elif duration <= 30:
+            score = 3
+        else:
+            score = 1
+
+        permits[permit_id][score_key] = score
+
+    return permits
+
 
 def append_key(primary, append_dict, append_key):
     '''
@@ -80,12 +101,17 @@ def main():
 
         segments = [row for row in reader]
 
+    # **segment scoring**
     permits_with_seg_count = segments_per_permit(segments)
 
-    permits_weighted_with_seg_count = weight_permits_by_segment_count(permits_with_seg_count)
+    permits_weighted_with_seg_count = score_permits_by_segment_count(permits_with_seg_count)
 
     # join segment weight to permits
-    permits = append_key(permits, permits_weighted_with_seg_count, "segment_count_weighted")
+    permits = append_key(permits, permits_weighted_with_seg_count, "segment_score")
+
+    # **duration scoring**
+    permits = score_permits_by_duration(permits)
+
     pdb.set_trace()
 
 results = main()

@@ -1,0 +1,17 @@
+knackpy.egg-info
+.idea/
+build/
+dist/
+changelog
+crontab.sh
+secrets.py
+dist
+__pycache__
+.env
+.DS_Store
+*.logrotate
+*.key
+*.pem
+*.pyc
+*.zip
+!*.md

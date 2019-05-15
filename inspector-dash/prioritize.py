@@ -1,19 +1,25 @@
 # TODO
 # Roadway Classifications
 # DAPCZ Area
-# Duration of Work Zone
 # 
 # DONE
 # # of Permits in Segment
+# Duration of Work Zone
 
 import csv
 import pdb
 
-PERMITS_FILE = "data/permits.csv"
+from config import *
 
-SEMGENTS_FILE = "data/segments.csv"
 
-def score_permits_by_duration(permits, duration_key="TOTAL_DAYS", score_key="duration_score"):
+def total_score(permits, score_keys, total_score_key_name="total_score"):
+    return permits
+
+def score_permits_by_duration(
+        permits,
+        duration_key=CONFIG["duration_scoring"]["source_key"],
+        score_key=CONFIG["duration_scoring"]["score_key"]
+    ):
     for permit_id in permits:
 
         try:
@@ -51,7 +57,7 @@ def append_key(primary, append_dict, append_key):
     return primary
 
 
-def score_permits_by_segment_count(permits, count_key="segment_count", score_key="segment_score"):
+def score_permits_by_segment_count(permits, count_key="segment_count", score_key=CONFIG["segment_scoring"]["score_key"]):
     
     for permit_id in permits:
         count = permits[permit_id][count_key]
@@ -107,7 +113,11 @@ def main():
     permits_weighted_with_seg_count = score_permits_by_segment_count(permits_with_seg_count)
 
     # join segment weight to permits
-    permits = append_key(permits, permits_weighted_with_seg_count, "segment_score")
+    permits = append_key(
+        permits,
+        permits_weighted_with_seg_count,
+        CONFIG["segment_scoring"]["score_key"]
+    )
 
     # **duration scoring**
     permits = score_permits_by_duration(permits)

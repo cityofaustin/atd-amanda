@@ -1,15 +1,3 @@
-# TODO
-# Roadway Classifications
-# DAPCZ Area
-#
-# DONE
-# # of Permits in Segment
-# Duration of Work Zone
-#
-# IN PROGRESS
-# get_segment_data
-# - do this in chunks, maybe 100 at a time?key
-
 import csv
 import pdb
 
@@ -42,17 +30,17 @@ def get_total_scores(permits, score_keys):
 def score_permits_by_road_class(permits, source_key, score_key):
     # TODO: get road class mapping
     for permit_id in permits.keys():
-        max_road_class = permits[permit_id].get("max_road_class")
-
-        if max_road_class in [1, 2, 4]:
+        road_classes = permits[permit_id].get("road_classes")
+        
+        if any(road_class in [1, 2, 4] for road_class in road_classes):
             # Interstate, US and State Highways, Major Arterials
             permits[permit_id][score_key] = 10
 
-        elif max_road_class == [5]:
+        elif any(road_class == 5 for road_class in road_classes):
             # Minor arterials
             permits[permit_id][score_key] = 7
         
-        elif max_road_class == 8:
+        elif any(road_class == 8 for road_class in road_classes):
             # Collector
             permits[permit_id][score_key] = 5
 
@@ -118,11 +106,7 @@ def get_max_road_class(permits, road_class_segments):
                 if segment_id in road_class_segments:
                     road_classes.append(road_class_segments[segment_id]["ROAD_CLASS"])
 
-            if road_classes:
-                permits[permit_id]["max_road_class"] = max(road_classes)
-
-            else:
-                permits[permit_id]["max_road_class"] = 0
+        permits[permit_id]["road_classes"] = road_classes
 
     return permits
 

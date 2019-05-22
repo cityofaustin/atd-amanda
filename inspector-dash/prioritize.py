@@ -26,15 +26,64 @@ from config.config import (
 from config.secrets import AGOL_CREDENTIALS
 
 
+def get_total_scores(permits, score_keys):
+    for permit_id in permits.keys():
+        score = 0
+        
+        for key in score_keys:
+            score += permits[permit_id][key]
+
+        permits[permit_id]["total_score"] = score
+
+    return permits
+
+
 def score_permits_by_road_class(permits, source_key, score_key):
     # TODO: get road class mapping
     for permit_id in permits.keys():
         max_road_class = permits[permit_id].get("max_road_class")
 
-        print("DO SCORE LOGIC HERE")
-        # Critical = 10, Arterial = 7, Collector = 5, Residential = 3
+        if max_road_class in [1, 2, 4]:
+            # Interstate, US and State Highways, Major Arterials
+            permits[permit_id][score_key] = 10
+
+        elif max_road_class == [5]:
+            # Minor arterials
+            permits[permit_id][score_key] = 7
+        
+        elif max_road_class == 8:
+            # Collector
+            permits[permit_id][score_key] = 5
+
+        else:
+            permits[permit_id][score_key] = 3            
 
     return permits
+
+# Critical = 10, Arterial = 7, Collector = 5, Residential = 3
+
+# 1, 2, 4 =  10 (Interstate, US and State Highways, Major Arterials)
+# 5 = 7 (Minor arterials)
+# 8 = 5 (city collector)
+# else = 3 (local city/county streets, whatever else)
+
+# 1   A10 Interstate, Fwy, Expy
+# 2   A20 US and State Highways
+# 4   A30 Major Arterials and County Roads (FM)
+# 5   A31 Minor Arterials
+# 6   A40 Local City/County Street
+# 8   A45 City Collector
+# 9   A61 Cul-de-sac
+# 10  A63 Ramps and Turnarounds
+# 11  A73 Alley
+# 12  A74 Driveway
+# 13  ROW Jurisdiction Border Segment
+# 14  A50 Unimporoved Public Road
+# 15  A60 Private Road
+# 16  A70 Routing Driveway/Service Road
+# 17  A72 Platted ROW/Unbuilt
+# 53  A25 (Not used - Old SH)
+# 57  A41 (Not used - Old Collector)
 
 
 def get_max_road_class(permits, road_class_segments):
@@ -245,7 +294,7 @@ def main():
     # **total up the score
     score_keys = get_all_score_keys(FIELD_CONFIG)
 
-    # todo: total up the score from the score keys
+    permits = get_total_scores(permits, score_keys)
 
     # **write to csv**
 

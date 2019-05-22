@@ -5,14 +5,42 @@
 # DONE
 # # of Permits in Segment
 # Duration of Work Zone
+#
+# IN PROGRESS
+# get_segment_data
+# - do this in chunks, maybe 100 at a time?
 
 import csv
 import pdb
 
 import agolutil
 
-from config import *
+from config.config import PERMITS_FILE, SEMGENTS_FILE, OUTPUT_FILE, FIELD_CONFIG
+from config.secrets import AGOL_CREDENTIALS
 
+pdb.set_trace()
+
+def get_segment_data(segment_ids, auth):
+
+    where_ids = ", ".join(f"'{x}'" for x in source_ids)
+
+    if where_ids:
+        where = "{} in ({})".format(cfg["geometry_record_id_field"], where_ids)
+
+        geometry_layer = agolutil.get_item(
+            auth=AGOL_CREDENTIALS,
+            service_id=cfg["geometry_service_id"],
+            layer_id=cfg["geometry_layer_id"],
+        )
+
+        source_geometries = geometry_layer.query(
+            where=where, outFields=cfg["geometry_record_id_field"]
+        )
+
+        if not source_geometries:
+            raise Exception(
+                "No features returned from source geometry layer query"
+            )
 
 def get_all_score_keys(config):
     score_keys = []
@@ -31,8 +59,8 @@ def total_score(permits, score_keys, total_score_key_name="total_score"):
 
 def score_permits_by_duration(
     permits,
-    duration_key=CONFIG["duration_scoring"]["source_key"],
-    score_key=CONFIG["duration_scoring"]["score_key"],
+    duration_key=FIELD_CONFIG["duration_scoring"]["source_key"],
+    score_key=FIELD_CONFIG["duration_scoring"]["score_key"],
 ):
     for permit_id in permits:
 
@@ -140,6 +168,9 @@ def main():
 
     # **segment road class scoring**
     pdb.set_trace()
+
+    # testing only. note that this function works without a token (the second param)
+    segment = agolutil.query_atx_street(3185420, None)
 
     pdb.set_trace()
     # **write to csv**

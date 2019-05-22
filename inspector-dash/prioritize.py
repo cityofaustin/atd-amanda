@@ -21,6 +21,7 @@ from config.config import (
     OUTPUT_FILE,
     FIELD_CONFIG,
     GEOM_CONFIG,
+    DAPCZ_SEGMENTS
 )
 
 from config.secrets import AGOL_CREDENTIALS
@@ -84,6 +85,22 @@ def score_permits_by_road_class(permits, source_key, score_key):
 # 17  A72 Platted ROW/Unbuilt
 # 53  A25 (Not used - Old SH)
 # 57  A41 (Not used - Old Collector)
+
+
+def score_dapcz_segments(permits, dapcz_segments):
+    # weight street segments that are in the Downtown Area Project Cooridnation Zone (DAPCZ)
+    for permit_id in permits.keys():
+        segment_ids = permits[permit_id].get("segments")
+
+        if segment_ids:
+            for segment_id in segment_ids:
+                if segment_id in dapcz_segments:
+                    permits[permit_id]["dapcz_score"] = 10
+                    break
+
+                else:
+                    permits[permit_id]["dapcz_score"] = 0
+    return permits
 
 
 def get_max_road_class(permits, road_class_segments):
@@ -290,6 +307,10 @@ def main():
         FIELD_CONFIG["road_classes"]["source_key"],
         FIELD_CONFIG["road_classes"]["score_key"],
     )
+
+    # **score DAPCZ segments**
+
+    permits = score_dapcz_segments(permits, DAPCZ_SEGMENTS)
 
     # **total up the score
     score_keys = get_all_score_keys(FIELD_CONFIG)

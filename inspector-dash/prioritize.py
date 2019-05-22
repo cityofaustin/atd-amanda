@@ -27,39 +27,36 @@ from config.secrets import AGOL_CREDENTIALS
 
 
 def score_permits_by_road_class(permits, source_key, score_key):
-    #TODO: get road class mapping
+    # TODO: get road class mapping
     for permit_id in permits.keys():
-        max_road_class = permits[permit_id].get('max_road_class')
+        max_road_class = permits[permit_id].get("max_road_class")
 
         print("DO SCORE LOGIC HERE")
         # Critical = 10, Arterial = 7, Collector = 5, Residential = 3
 
-
-
     return permits
-
 
 
 def get_max_road_class(permits, road_class_segments):
     for permit_id in permits.keys():
-        segments = permits[permit_id].get('segments')
-        
+        segments = permits[permit_id].get("segments")
+
         if segments:
-            
+
             road_classes = []
-            
+
             for segment_id in segments:
-                
+
                 segment_id = int(segment_id)
 
                 if segment_id in road_class_segments:
-                    road_classes.append(road_class_segments[segment_id]['ROAD_CLASS'])
+                    road_classes.append(road_class_segments[segment_id]["ROAD_CLASS"])
 
             if road_classes:
-                permits[permit_id]['max_road_class'] = max(road_classes)
-            
+                permits[permit_id]["max_road_class"] = max(road_classes)
+
             else:
-                permits[permit_id]['max_road_class'] = 0
+                permits[permit_id]["max_road_class"] = 0
 
     return permits
 
@@ -144,9 +141,7 @@ def append_key(primary, append_dict, append_key):
 
 
 def score_permits_by_segment_count(
-    permits,
-    count_key="segment_count",
-    score_key=FIELD_CONFIG["segments"]["score_key"],
+    permits, count_key="segment_count", score_key=FIELD_CONFIG["segments"]["score_key"]
 ):
     print("score by segment count")
     for permit_id in permits:
@@ -170,7 +165,7 @@ def segments_by_permit(segments):
         permit_id = seg.get("FOLDERRSN")
 
         if permit_id not in permit_segments:
-            permit_segments[permit_id] = { "segment_count": 0 }
+            permit_segments[permit_id] = {"segment_count": 0}
             permit_segments[permit_id]["segments"] = []
 
         permit_segments[permit_id]["segment_count"] += 1
@@ -208,24 +203,20 @@ def main():
 
     # join segment weight to permits
     permits = append_key(
-        permits,
-        permits_weighted_with_seg_count,
-        FIELD_CONFIG["segments"]["score_key"],
+        permits, permits_weighted_with_seg_count, FIELD_CONFIG["segments"]["score_key"]
     )
 
     # join segment id list to permits
-    permits = append_key(
-        permits,
-        permits_with_segments,
-        "segments"
-    )
+    permits = append_key(permits, permits_with_segments, "segments")
 
     # **duration scoring**
     permits = score_permits_by_duration(permits)
 
     # **segment road class scoring**
 
-    segment_ids = [segment[FIELD_CONFIG["segments"]["segment_id_key"]] for segment in segments]
+    segment_ids = [
+        segment[FIELD_CONFIG["segments"]["segment_id_key"]] for segment in segments
+    ]
 
     # remove dupes
     segment_ids = list(set(segment_ids))
@@ -245,15 +236,18 @@ def main():
 
     permits = get_max_road_class(permits, segment_road_class)
 
-    permits = score_permits_by_road_class(permits, FIELD_CONFIG["road_classes"]["source_key"], FIELD_CONFIG["road_classes"]["score_key"])
-    
+    permits = score_permits_by_road_class(
+        permits,
+        FIELD_CONFIG["road_classes"]["source_key"],
+        FIELD_CONFIG["road_classes"]["score_key"],
+    )
+
     # **total up the score
     score_keys = get_all_score_keys(FIELD_CONFIG)
 
-    #todo: total up the score from the score keys
-    
+    # todo: total up the score from the score keys
+
     # **write to csv**
-    
 
     output_data = [permits[permit_id] for permit_id in permits.keys()]
 

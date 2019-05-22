@@ -9,7 +9,20 @@
 import csv
 import pdb
 
+import agolutil
+
 from config import *
+
+
+def get_all_score_keys(config):
+    score_keys = []
+
+    for key in config:
+        score_key = config[key].get("score_key")
+        if score_key:
+            score_keys.append(score_key)
+
+    return score_keys
 
 
 def total_score(permits, score_keys, total_score_key_name="total_score"):
@@ -110,7 +123,7 @@ def main():
 
         segments = [row for row in reader]
 
-    # **segment scoring**
+    # **number of segment scoring**
     permits_with_seg_count = segments_per_permit(segments)
 
     permits_weighted_with_seg_count = score_permits_by_segment_count(
@@ -125,7 +138,25 @@ def main():
     # **duration scoring**
     permits = score_permits_by_duration(permits)
 
+    # **segment road class scoring**
     pdb.set_trace()
+
+    pdb.set_trace()
+    # **write to csv**
+    score_keys = get_all_score_keys(CONFIG)
+
+    output_data = [ permits[permit_id] for permit_id in permits.keys()]
+
+    with open(OUTPUT_FILE, "w") as fout:
+        # assume fieldnames are consistent across all records,
+        # so just take the keys from the first entry as fieldnames
+        writer = csv.DictWriter(fout, fieldnames=output_data[0].keys())
+        
+        writer.writeheader()
+
+        for row in output_data:
+            writer.writerow(row)
+
 
 
 results = main()
@@ -134,5 +165,3 @@ results = main()
 # https://stackoverflow.com/questions/613183/how-do-i-sort-a-dictionary-by-value
 # results = sorted(results.items(), key=lambda kv: kv[1], reverse=True)
 
-
-pdb.set_trace()

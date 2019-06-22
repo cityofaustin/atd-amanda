@@ -149,6 +149,9 @@ def merge_inspector_zones(
             for zone in inspector_zones:
                 permits[permit_id]["inspector_zones"].append(zone)
 
+                # remove duplicate zones for each permit
+                permits[permit_id]["inspector_zones"] = list(set(permits[permit_id]["inspector_zones"]))
+
     return permits
 
 

@@ -1,3 +1,10 @@
+"""
+Create a prioritized list of right-of-way (ROW) permits to be
+inspected based on various scoring criteria.
+
+TODO:
+Remove brackets from zone column when writing to CSV
+"""
 import csv
 import pdb
 
@@ -96,6 +103,18 @@ def score_dapcz_segments(permits, dapcz_segments):
 
                 else:
                     permits[permit_id]["dapcz_score"] = 0
+    return permits
+
+
+def stringify_inspector_zones(permits):
+    # turn insepctor zone arrays into plain comma-separates strings
+    for permit_id in permits.keys():
+        zone_array = permits[permit_id].get("inspector_zones")
+        if zone_array:
+            permits[permit_id]["inspector_zones"] = " ".join(str(x) for x in zone_array)
+        else:
+            permits[permit_id]["inspector_zones"] = ""
+    
     return permits
 
 
@@ -368,7 +387,7 @@ def main():
     segment_ids = list(set(segment_ids))
 
     # query segment data from ArcGIS Online in chunks
-    chunksize = 500
+    chunksize = 10
 
     segment_features = []
 
@@ -389,7 +408,8 @@ def main():
 
     segments_with_zones_and_road_class = {}
 
-    for i in range(0, len(segment_ids), chunksize):
+    # for i in range(0, len(segment_ids), chunksize):
+    for i in range(0, 10, chunksize):
         # get road class
         segment_features_subset = get_segment_data(
             segment_ids[i : i + chunksize], segment_layer, SEGMENT_LAYER_CFG
@@ -435,6 +455,8 @@ def main():
 
     # add inspector zones to permits dict
     permits = merge_inspector_zones(permits, segments_with_zones_and_road_class)
+
+    permits = stringify_inspector_zones(permits)
 
     # **score DAPCZ segments**
     permits = score_dapcz_segments(permits, DAPCZ_SEGMENTS)

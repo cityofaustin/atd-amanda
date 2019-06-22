@@ -2,14 +2,16 @@ import csv
 import pdb
 
 import agolutil
+import arcgis
 
 from config.config import (
     PERMITS_FILE,
     SEMGENTS_FILE,
     OUTPUT_FILE,
-    FIELD_CONFIG,
-    GEOM_CONFIG,
-    DAPCZ_SEGMENTS
+    FIELD_CFG,
+    SEGMENT_LAYER_CFG,
+    DAPCZ_SEGMENTS,
+    INSPECTOR_LAYER_CFG,
 )
 
 from config.secrets import AGOL_CREDENTIALS
@@ -18,9 +20,13 @@ from config.secrets import AGOL_CREDENTIALS
 def get_total_scores(permits, score_keys):
     for permit_id in permits.keys():
         score = 0
-        
+
         for key in score_keys:
-            score += permits[permit_id][key]
+            try:
+                score += permits[permit_id][key]
+            except:
+                # TODO: why though?
+                continue
 
         permits[permit_id]["total_score"] = score
 
@@ -28,10 +34,37 @@ def get_total_scores(permits, score_keys):
 
 
 def score_permits_by_road_class(permits, source_key, score_key):
-    # TODO: get road class mapping
+    """
+    Our score criteria: Critical = 10, Arterial = 7, Collector = 5, Residential = 3
+
+    1, 2, 4 =  10 (Interstate, US and State Highways, Major Arterials)
+    5 = 7 (Minor arterials)
+    8 = 5 (city collector)
+    else = 3 (local city/county streets, whatever else)
+    
+    ### CTM GIS Street Segment Road Classes
+    1   A10 Interstate, Fwy, Expy
+    2   A20 US and State Highways
+    4   A30 Major Arterials and County Roads (FM)
+    5   A31 Minor Arterials
+    6   A40 Local City/County Street
+    8   A45 City Collector
+    9   A61 Cul-de-sac
+    10  A63 Ramps and Turnarounds
+    11  A73 Alley
+    12  A74 Driveway
+    13  ROW Jurisdiction Border Segment
+    14  A50 Unimporoved Public Road
+    15  A60 Private Road
+    16  A70 Routing Driveway/Service Road
+    17  A72 Platted ROW/Unbuilt
+    53  A25 (Not used - Old SH)
+    57  A41 (Not used - Old Collector)
+    """
+
     for permit_id in permits.keys():
         road_classes = permits[permit_id].get("road_classes")
-        
+
         if any(road_class in [1, 2, 4] for road_class in road_classes):
             # Interstate, US and State Highways, Major Arterials
             permits[permit_id][score_key] = 10
@@ -39,40 +72,15 @@ def score_permits_by_road_class(permits, source_key, score_key):
         elif any(road_class == 5 for road_class in road_classes):
             # Minor arterials
             permits[permit_id][score_key] = 7
-        
+
         elif any(road_class == 8 for road_class in road_classes):
             # Collector
             permits[permit_id][score_key] = 5
 
         else:
-            permits[permit_id][score_key] = 3            
+            permits[permit_id][score_key] = 3
 
     return permits
-
-# Critical = 10, Arterial = 7, Collector = 5, Residential = 3
-
-# 1, 2, 4 =  10 (Interstate, US and State Highways, Major Arterials)
-# 5 = 7 (Minor arterials)
-# 8 = 5 (city collector)
-# else = 3 (local city/county streets, whatever else)
-
-# 1   A10 Interstate, Fwy, Expy
-# 2   A20 US and State Highways
-# 4   A30 Major Arterials and County Roads (FM)
-# 5   A31 Minor Arterials
-# 6   A40 Local City/County Street
-# 8   A45 City Collector
-# 9   A61 Cul-de-sac
-# 10  A63 Ramps and Turnarounds
-# 11  A73 Alley
-# 12  A74 Driveway
-# 13  ROW Jurisdiction Border Segment
-# 14  A50 Unimporoved Public Road
-# 15  A60 Private Road
-# 16  A70 Routing Driveway/Service Road
-# 17  A72 Platted ROW/Unbuilt
-# 53  A25 (Not used - Old SH)
-# 57  A41 (Not used - Old Collector)
 
 
 def score_dapcz_segments(permits, dapcz_segments):
@@ -91,6 +99,40 @@ def score_dapcz_segments(permits, dapcz_segments):
     return permits
 
 
+def merge_inspector_zones(
+    permits, segments_with_inspector_zones, key="inspector_zones"
+):
+    """
+    Join inspector zone data from GIS lookup to master permits object
+    """
+    for permit_id in permits.keys():
+
+        permits[permit_id]["inspector_zones"] = []
+
+        segments = permits[permit_id].get("segments")
+
+        if not segments:
+            continue
+
+        for segment_id in segments:
+            segment_data = segments_with_inspector_zones.get(
+                int(segment_id)
+            )  # < segment_id in permits object is a string!
+
+            if not segment_data:
+                continue
+
+            inspector_zones = segment_data.get("inspector_zones")
+
+            if not inspector_zones:
+                continue
+
+            for zone in inspector_zones:
+                permits[permit_id]["inspector_zones"].append(zone)
+
+    return permits
+
+
 def get_max_road_class(permits, road_class_segments):
     for permit_id in permits.keys():
         segments = permits[permit_id].get("segments")
@@ -104,31 +146,81 @@ def get_max_road_class(permits, road_class_segments):
                 segment_id = int(segment_id)
 
                 if segment_id in road_class_segments:
-                    road_classes.append(road_class_segments[segment_id]["ROAD_CLASS"])
+                    road_classes.append(road_class_segments[segment_id]["road_class"])
 
         permits[permit_id]["road_classes"] = road_classes
 
     return permits
 
 
-def get_segment_data(segment_ids, auth):
+def get_inspector_areas(
+    segment_features,
+    inspector_layer,
+    inspector_layer_cfg,
+    segment_id_field="SEGMENT_ID",
+    inspector_zone_id_field="ROW_INSPECTOR_ZONE_ID",
+):
+
+    segments_with_zones = {}
+
+    sr = segment_features.spatial_reference
+
+    max_retries = 5
+
+    for feature in segment_features:
+        n = 0
+        # add segment geometry to params, which is passed to interesect request
+        # inspector_layer_cfg["params"]["geometry"] = feature.geometry
+        segment_id = feature.attributes[segment_id_field]
+        segments_with_zones[segment_id] = {"inspector_zones": []}
+
+        geom = feature.geometry
+
+        filter_ = arcgis.geometry.filters.intersects(sr=sr, geometry=geom)
+
+        while True:
+            try:
+                intersect_zones = inspector_layer.query(
+                    geometry_filter=filter_, return_geometry=False
+                )
+
+            except Exception as e:
+                n += 1
+                if n == max_retries:
+                    raise e
+            break
+
+        for zone in intersect_zones:
+            segments_with_zones[segment_id]["inspector_zones"].append(
+                zone.attributes[inspector_zone_id_field]
+            )
+
+    return segments_with_zones
+
+
+def parse_road_class(segment_features, segment_id_key, road_class_id_key="ROAD_CLASS"):
+    segments_with_road_class = {}
+
+    for feature in segment_features:
+        segment_id = feature.attributes[segment_id_key]
+        road_class = feature.attributes[road_class_id_key]
+        segments_with_road_class[segment_id] = {"road_class": road_class}
+
+    return segments_with_road_class
+
+
+def get_segment_data(segment_ids, segment_layer, layer_cfg):
     print("get segment data")
     # ready id string as a sql-like statement
     where_ids = ", ".join(f"'{x}'" for x in segment_ids)
 
-    where = "{} in ({})".format(GEOM_CONFIG["primary_key"], where_ids)
+    where = "{} in ({})".format(layer_cfg["primary_key"], where_ids)
 
-    geometry_layer = agolutil.get_item(
-        auth=auth,
-        service_id=GEOM_CONFIG["service_id"],
-        layer_id=GEOM_CONFIG["layer_id"],
+    features = segment_layer.query(
+        where=where, outFields=layer_cfg["outfields"], returnGeometry=True
     )
 
-    features = geometry_layer.query(
-        where=where, outFields=GEOM_CONFIG["outfields"], returnGeometry=False
-    )
-
-    return [feature.attributes for feature in features]
+    return features
 
 
 def get_all_score_keys(config):
@@ -148,8 +240,8 @@ def total_score(permits, score_keys, total_score_key_name="total_score"):
 
 def score_permits_by_duration(
     permits,
-    duration_key=FIELD_CONFIG["duration"]["source_key"],
-    score_key=FIELD_CONFIG["duration"]["score_key"],
+    duration_key=FIELD_CFG["duration"]["source_key"],
+    score_key=FIELD_CFG["duration"]["score_key"],
 ):
     print("score by duration")
 
@@ -185,13 +277,17 @@ def append_key(primary, append_dict, append_key):
 
     for record_id in append_dict:
         # TODO: probably want to handle a KeyError here
-        primary[record_id][append_key] = append_dict[record_id][append_key]
+        try:
+            primary[record_id][append_key] = append_dict[record_id][append_key]
+        except KeyError:
+            # TODO: why is the key missing?
+            continue
 
     return primary
 
 
 def score_permits_by_segment_count(
-    permits, count_key="segment_count", score_key=FIELD_CONFIG["segments"]["score_key"]
+    permits, count_key="segment_count", score_key=FIELD_CFG["segments"]["score_key"]
 ):
     print("score by segment count")
     for permit_id in permits:
@@ -253,7 +349,7 @@ def main():
 
     # join segment weight to permits
     permits = append_key(
-        permits, permits_weighted_with_seg_count, FIELD_CONFIG["segments"]["score_key"]
+        permits, permits_weighted_with_seg_count, FIELD_CFG["segments"]["score_key"]
     )
 
     # join segment id list to permits
@@ -265,44 +361,92 @@ def main():
     # **segment road class scoring**
 
     segment_ids = [
-        segment[FIELD_CONFIG["segments"]["segment_id_key"]] for segment in segments
+        segment[FIELD_CFG["segments"]["segment_id_key"]] for segment in segments
     ]
 
     # remove dupes
     segment_ids = list(set(segment_ids))
 
     # query segment data from ArcGIS Online in chunks
-    chunksize = 2500
+    # chunksize = 2500
+    chunksize = 10
 
-    segment_road_class = []
+    segment_features = []
 
-    for i in range(0, len(segment_ids), chunksize):
-        chunk_of_data = get_segment_data(
-            segment_ids[i : i + chunksize], AGOL_CREDENTIALS
+    segments_with_zones = {}
+
+    # get arcgis feature layers
+    segment_layer = agolutil.get_item(
+        auth=AGOL_CREDENTIALS,
+        service_id=SEGMENT_LAYER_CFG["service_id"],
+        layer_id=SEGMENT_LAYER_CFG["layer_id"],
+    )
+
+    inspector_layer = agolutil.get_item(
+        auth=AGOL_CREDENTIALS,
+        service_id=INSPECTOR_LAYER_CFG["service_id"],
+        layer_id=INSPECTOR_LAYER_CFG["layer_id"],
+    )
+
+    segments_with_zones_and_road_class = {}
+
+    # for i in range(0, len(segment_ids), chunksize):
+    for i in range(0, 10, chunksize):
+        # get road class
+        segment_features_subset = get_segment_data(
+            segment_ids[i : i + chunksize], segment_layer, SEGMENT_LAYER_CFG
         )
-        segment_road_class += chunk_of_data
 
-    segment_road_class = index_by_key(segment_road_class, GEOM_CONFIG["primary_key"])
+        segment_features += segment_features_subset  # was segment_road_class
 
-    permits = get_max_road_class(permits, segment_road_class)
+        segments_with_road_class = parse_road_class(
+            segment_features, SEGMENT_LAYER_CFG["primary_key"]
+        )
+
+        # get inspector area via intersect query
+        segment_with_zones_subset = get_inspector_areas(
+            segment_features_subset, inspector_layer, INSPECTOR_LAYER_CFG
+        )
+
+        segments_with_zones.update(segment_with_zones_subset)
+
+    # merge zones and road class data
+    for key in segments_with_zones:
+        segments_with_zones_and_road_class[key] = {}
+
+        segments_with_zones_and_road_class[key][
+            "inspector_zones"
+        ] = segments_with_zones[key]["inspector_zones"]
+
+        segments_with_zones_and_road_class[key][
+            "road_class"
+        ] = segments_with_road_class[key]["road_class"]
+
+    # TODO
+    # only doing small chunks now
+    # fix this to play with segments_with_zones_and_road_class
+    # segment_road_class = index_by_key(segment_road_class, SEGMENT_LAYER_CFG["primary_key"])
+
+    permits = get_max_road_class(permits, segments_with_zones_and_road_class)
 
     permits = score_permits_by_road_class(
         permits,
-        FIELD_CONFIG["road_classes"]["source_key"],
-        FIELD_CONFIG["road_classes"]["score_key"],
+        FIELD_CFG["road_classes"]["source_key"],
+        FIELD_CFG["road_classes"]["score_key"],
     )
 
-    # **score DAPCZ segments**
+    # add inspector zones to permits dict
+    permits = merge_inspector_zones(permits, segments_with_zones_and_road_class)
 
+    # **score DAPCZ segments**
     permits = score_dapcz_segments(permits, DAPCZ_SEGMENTS)
 
     # **total up the score
-    score_keys = get_all_score_keys(FIELD_CONFIG)
+    score_keys = get_all_score_keys(FIELD_CFG)
 
     permits = get_total_scores(permits, score_keys)
 
     # **write to csv**
-
     output_data = [permits[permit_id] for permit_id in permits.keys()]
 
     with open(OUTPUT_FILE, "w") as fout:

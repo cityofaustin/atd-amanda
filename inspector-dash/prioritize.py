@@ -390,7 +390,7 @@ def main():
     segment_ids = list(set(segment_ids))
 
     # query segment data from ArcGIS Online in chunks
-    chunksize = 10
+    chunksize = 500
 
     segment_features = []
 
@@ -411,8 +411,7 @@ def main():
 
     segments_with_zones_and_road_class = {}
 
-    # for i in range(0, len(segment_ids), chunksize):
-    for i in range(0, 10, chunksize):
+    for i in range(0, len(segment_ids), chunksize):
         # get road class
         segment_features_subset = get_segment_data(
             segment_ids[i : i + chunksize], segment_layer, SEGMENT_LAYER_CFG

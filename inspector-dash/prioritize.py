@@ -111,7 +111,7 @@ def stringify_inspector_zones(permits):
     for permit_id in permits.keys():
         zone_array = permits[permit_id].get("inspector_zones")
         if zone_array:
-            permits[permit_id]["inspector_zones"] = " ".join(str(x) for x in zone_array)
+            permits[permit_id]["inspector_zones"] = ", ".join(str(x) for x in zone_array)
         else:
             permits[permit_id]["inspector_zones"] = ""
     

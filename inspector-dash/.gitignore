@@ -9,6 +9,8 @@ dist
 __pycache__
 .env
 .DS_Store
+*permits_scored*
+*prioritize_shapely.py*
 *.DS_Store
 */.DS_Store
 *.logrotate

@@ -2641,7 +2641,7 @@ DAPCZ_SEGMENTS = [
 ]
 
 INSPECTOR_LAYER_CFG = {
-    "service_id": "6f8494ac82154c11a09054eb6345d812",
+    "service_id": "9faba45a08524a458dd346c49361180f",
     "layer_id": 0,
     "params": {
         "outFields": "ROW_INSPECTOR_ZONE_ID",

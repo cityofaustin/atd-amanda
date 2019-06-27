@@ -159,9 +159,9 @@ def get_max_road_class(permits, road_class_segments):
     for permit_id in permits.keys():
         segments = permits[permit_id].get("segments")
 
-        if segments:
+        road_classes = []
 
-            road_classes = []
+        if segments:
 
             for segment_id in segments:
 

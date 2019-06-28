@@ -6,7 +6,7 @@ OUTPUT_FILE = "permits_scored.csv"
 
 FIELD_CFG = {
     "duration": {"source_key": "TOTAL_DAYS", "score_key": "duration_score"},
-    "segments": {
+    "street_segments": {
         "source_key": "segment_count",
         "score_key": "segment_score",
         "segment_id_key": "PROPERTYID",

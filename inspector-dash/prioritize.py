@@ -93,7 +93,7 @@ def score_permits_by_road_class(permits, source_key, score_key):
 def score_dapcz_segments(permits, dapcz_segments):
     # weight street segments that are in the Downtown Area Project Cooridnation Zone (DAPCZ)
     for permit_id in permits.keys():
-        segment_ids = permits[permit_id].get("segments")
+        segment_ids = permits[permit_id].get("street_segments")
 
         if segment_ids:
             for segment_id in segment_ids:
@@ -106,14 +106,14 @@ def score_dapcz_segments(permits, dapcz_segments):
     return permits
 
 
-def stringify_inspector_zones(permits):
+def stringify_list(permits, key):
     # turn insepctor zone arrays into plain comma-separates strings
     for permit_id in permits.keys():
-        zone_array = permits[permit_id].get("inspector_zones")
+        zone_array = permits[permit_id].get(key)
         if zone_array:
-            permits[permit_id]["inspector_zones"] = ", ".join(str(x) for x in zone_array)
+            permits[permit_id][key] = ", ".join(str(x) for x in zone_array)
         else:
-            permits[permit_id]["inspector_zones"] = ""
+            permits[permit_id][key] = ""
     
     return permits
 
@@ -128,7 +128,7 @@ def merge_inspector_zones(
 
         permits[permit_id]["inspector_zones"] = []
 
-        segments = permits[permit_id].get("segments")
+        segments = permits[permit_id].get("street_segments")
 
         if not segments:
             continue
@@ -157,7 +157,7 @@ def merge_inspector_zones(
 
 def get_max_road_class(permits, road_class_segments):
     for permit_id in permits.keys():
-        segments = permits[permit_id].get("segments")
+        segments = permits[permit_id].get("street_segments")
 
         road_classes = []
 
@@ -298,7 +298,6 @@ def append_key(primary, append_dict, append_key):
     """
 
     for record_id in append_dict:
-        # TODO: probably want to handle a KeyError here
         try:
             primary[record_id][append_key] = append_dict[record_id][append_key]
         except KeyError:
@@ -309,7 +308,7 @@ def append_key(primary, append_dict, append_key):
 
 
 def score_permits_by_segment_count(
-    permits, count_key="segment_count", score_key=FIELD_CFG["segments"]["score_key"]
+    permits, count_key="segment_count", score_key=FIELD_CFG["street_segments"]["score_key"]
 ):
     print("score by segment count")
     for permit_id in permits:
@@ -334,10 +333,10 @@ def segments_by_permit(segments):
 
         if permit_id not in permit_segments:
             permit_segments[permit_id] = {"segment_count": 0}
-            permit_segments[permit_id]["segments"] = []
+            permit_segments[permit_id]["street_segments"] = []
 
         permit_segments[permit_id]["segment_count"] += 1
-        permit_segments[permit_id]["segments"].append(seg.get("PROPERTYID"))
+        permit_segments[permit_id]["street_segments"].append(seg.get("PROPERTYID"))
 
     return permit_segments
 
@@ -371,19 +370,19 @@ def main():
 
     # join segment weight to permits
     permits = append_key(
-        permits, permits_weighted_with_seg_count, FIELD_CFG["segments"]["score_key"]
+        permits, permits_weighted_with_seg_count, FIELD_CFG["street_segments"]["score_key"]
     )
 
     # join segment id list to permits
-    permits = append_key(permits, permits_with_segments, "segments")
-
+    permits = append_key(permits, permits_with_segments, "street_segments")
+    
     # **duration scoring**
     permits = score_permits_by_duration(permits)
 
     # **segment road class scoring**
 
     segment_ids = [
-        segment[FIELD_CFG["segments"]["segment_id_key"]] for segment in segments
+        segment[FIELD_CFG["street_segments"]["segment_id_key"]] for segment in segments
     ]
 
     # remove dupes
@@ -409,6 +408,8 @@ def main():
         layer_id=INSPECTOR_LAYER_CFG["layer_id"],
     )
 
+    segments_with_road_class = {}
+    segments_with_zones = {}
     segments_with_zones_and_road_class = {}
 
     for i in range(0, len(segment_ids), chunksize):
@@ -417,11 +418,11 @@ def main():
             segment_ids[i : i + chunksize], segment_layer, SEGMENT_LAYER_CFG
         )
 
-        segment_features += segment_features_subset  # was segment_road_class
-
-        segments_with_road_class = parse_road_class(
-            segment_features, SEGMENT_LAYER_CFG["primary_key"]
+        segments_with_road_class_subset = parse_road_class(
+            segment_features_subset, SEGMENT_LAYER_CFG["primary_key"]
         )
+
+        segments_with_road_class.update(segments_with_road_class_subset)
 
         # get inspector area via intersect query
         segment_with_zones_subset = get_inspector_areas(
@@ -457,8 +458,12 @@ def main():
 
     # add inspector zones to permits dict
     permits = merge_inspector_zones(permits, segments_with_zones_and_road_class)
+    
+    permits = stringify_list(permits, "inspector_zones")
+    
+    permits = stringify_list(permits, "road_classes")
 
-    permits = stringify_inspector_zones(permits)
+    permits = stringify_list(permits, "street_segments")
 
     # **score DAPCZ segments**
     permits = score_dapcz_segments(permits, DAPCZ_SEGMENTS)

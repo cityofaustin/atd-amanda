@@ -459,14 +459,14 @@ def main():
     # add inspector zones to permits dict
     permits = merge_inspector_zones(permits, segments_with_zones_and_road_class)
     
+    # **score DAPCZ segments**
+    permits = score_dapcz_segments(permits, DAPCZ_SEGMENTS)
+
     permits = stringify_list(permits, "inspector_zones")
     
     permits = stringify_list(permits, "road_classes")
 
     permits = stringify_list(permits, "street_segments")
-
-    # **score DAPCZ segments**
-    permits = score_dapcz_segments(permits, DAPCZ_SEGMENTS)
 
     # **total up the score
     score_keys = get_all_score_keys(FIELD_CFG)

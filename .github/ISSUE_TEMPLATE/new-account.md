@@ -2,7 +2,7 @@
 name: New Account
 about: Template for New AMANDA Account Requests
 title: New User Account For
-labels: 'Need: 1-Must Have, Team: Apps, Type: IT Support'
+labels: 'Need: 1-Must Have, Type: IT Support'
 assignees: TracyLinder
 
 ---

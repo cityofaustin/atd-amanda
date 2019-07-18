@@ -2,7 +2,7 @@
 name: User Issue
 about: Standard User Issue
 title: User Issue - [User Name]
-labels: 'Team: Apps, Type: IT Support'
+labels: 'Type: IT Support'
 assignees: TracyLinder
 
 ---
